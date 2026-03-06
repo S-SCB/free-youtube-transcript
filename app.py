@@ -17,10 +17,5 @@ def get_transcript():
 
 if __name__ == '__main__':
     app.run()
-```
 
-**`requirements.txt`**
-```
-flask
-youtube-transcript-api
-gunicorn
+
