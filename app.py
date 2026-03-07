@@ -3,8 +3,11 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_comment_downloader import YoutubeCommentDownloader
 import feedparser
 import urllib.parse
+import requests
 
 app = Flask(__name__)
+
+TAVILY_API_KEY = "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"
 
 @app.route('/transcript')
 def get_transcript():
@@ -35,11 +38,32 @@ def get_comments():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# 1. Raw Google News (no content)
 @app.route('/news')
 def get_news():
     topic = request.args.get('topic', 'artificial intelligence')
     limit = int(request.args.get('limit', 10))
-    include_content = request.args.get('content', 'false').lower() == 'true'
+    try:
+        query = urllib.parse.quote(topic)
+        url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
+        feed = feedparser.parse(url)
+        articles = []
+        for entry in feed.entries[:limit]:
+            articles.append({
+                "title": entry.title,
+                "link": entry.link,
+                "published": entry.published,
+                "source": entry.source.title if hasattr(entry, 'source') else "Unknown",
+            })
+        return jsonify(articles)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# 2. Google News WITH content (uses Tavily)
+@app.route('/news/content')
+def get_news_with_content():
+    topic = request.args.get('topic', 'artificial intelligence')
+    limit = int(request.args.get('limit', 5))
     try:
         query = urllib.parse.quote(topic)
         url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
@@ -53,25 +77,44 @@ def get_news():
                 "source": entry.source.title if hasattr(entry, 'source') else "Unknown",
                 "content": ""
             }
-            if include_content:
-                try:
-                    import requests
-                    from bs4 import BeautifulSoup
-                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-                    # Follow redirects to get actual article URL
-                    r = requests.get(entry.link, headers=headers, timeout=8, allow_redirects=True)
-                    actual_url = r.url
-                    soup = BeautifulSoup(r.text, 'html.parser')
-                    # Remove scripts and styles
-                    for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
-                        tag.decompose()
-                    paragraphs = soup.find_all('p')
-                    content = " ".join([p.get_text().strip() for p in paragraphs[:8] if len(p.get_text().strip()) > 50])
-                    article["content"] = content if content else "Content blocked by publisher"
-                    article["actual_url"] = actual_url
-                except Exception as ex:
-                    article["content"] = f"Could not fetch: {str(ex)}"
+            try:
+                r = requests.post(
+                    "https://api.tavily.com/extract",
+                    json={"urls": [entry.link], "api_key": TAVILY_API_KEY},
+                    timeout=10
+                )
+                data = r.json()
+                if data.get("results"):
+                    article["content"] = data["results"][0].get("raw_content", "")[:2000]
+                    article["actual_url"] = data["results"][0].get("url", entry.link)
+            except:
+                article["content"] = "Could not fetch content"
             articles.append(article)
         return jsonify(articles)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# 3. Scrape any single URL
+@app.route('/scrape')
+def scrape_url():
+    url = request.args.get('url')
+    if not url:
+        return jsonify({"error": "Please provide a url"}), 400
+    try:
+        r = requests.post(
+            "https://api.tavily.com/extract",
+            json={"urls": [url], "api_key": TAVILY_API_KEY},
+            timeout=10
+        )
+        data = r.json()
+        if data.get("results"):
+            return jsonify({
+                "url": data["results"][0].get("url"),
+                "content": data["results"][0].get("raw_content", "")
+            })
+        return jsonify({"error": "No content found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    app.run()
