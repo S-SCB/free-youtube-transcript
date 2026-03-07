@@ -90,3 +90,7 @@ def get_news_with_content():
         return jsonify(articles)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/')
+def home():
+    return "API is running", 200
