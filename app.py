@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_comment_downloader import YoutubeCommentDownloader
 
 app = Flask(__name__)
 
@@ -15,7 +16,22 @@ def get_transcript():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/comments')
+def get_comments():
+    video_id = request.args.get('id')
+    limit = int(request.args.get('limit', 50))  # default 50 comments
+    if not video_id:
+        return jsonify({"error": "Please provide a video id"}), 400
+    try:
+        downloader = YoutubeCommentDownloader()
+        comments = []
+        for comment in downloader.get_comments_from_url(f'https://youtube.com/watch?v={video_id}'):
+            comments.append(comment)
+            if len(comments) >= limit:
+                break
+        return jsonify(comments)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     app.run()
-
-
