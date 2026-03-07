@@ -38,22 +38,33 @@ def get_comments():
 @app.route('/news')
 def get_news():
     topic = request.args.get('topic', 'artificial intelligence')
-    limit = int(request.args.get('limit', 20))
+    limit = int(request.args.get('limit', 10))
+    include_content = request.args.get('content', 'false').lower() == 'true'
     try:
         query = urllib.parse.quote(topic)
         url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
         feed = feedparser.parse(url)
         articles = []
         for entry in feed.entries[:limit]:
-            articles.append({
+            article = {
                 "title": entry.title,
                 "link": entry.link,
                 "published": entry.published,
-                "source": entry.source.title if hasattr(entry, 'source') else "Unknown"
-            })
+                "source": entry.source.title if hasattr(entry, 'source') else "Unknown",
+                "content": ""
+            }
+            if include_content:
+                try:
+                    import requests
+                    from bs4 import BeautifulSoup
+                    headers = {"User-Agent": "Mozilla/5.0"}
+                    r = requests.get(entry.link, headers=headers, timeout=5)
+                    soup = BeautifulSoup(r.text, 'html.parser')
+                    paragraphs = soup.find_all('p')
+                    article["content"] = " ".join([p.get_text() for p in paragraphs[:5]])
+                except:
+                    article["content"] = "Could not fetch content"
+            articles.append(article)
         return jsonify(articles)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run()

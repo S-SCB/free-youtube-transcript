@@ -3,3 +3,5 @@ youtube-transcript-api
 youtube-comment-downloader
 gunicorn
 feedparser
+requests
+beautifulsoup4
