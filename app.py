@@ -2,7 +2,6 @@ from flask import Flask, jsonify, request
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_comment_downloader import YoutubeCommentDownloader
 from youtube_transcript_api.proxies import GenericProxyConfig
-import os
 
 app = Flask(__name__)
 
@@ -24,7 +23,11 @@ def get_transcript():
                 https_url=PROXY_URL,
             )
         )
-        transcript = ytt.fetch(video_id)
+        # Try multiple language variants automatically
+        transcript_list = ytt.list(video_id)
+        transcript = transcript_list.find_transcript(
+            ['en', 'en-US', 'en-GB', 'en-AU']
+        ).fetch()
         return jsonify([{"text": s.text, "start": s.start} for s in transcript])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
