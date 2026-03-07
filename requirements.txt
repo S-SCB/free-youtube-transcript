@@ -2,3 +2,4 @@ flask
 youtube-transcript-api
 youtube-comment-downloader
 gunicorn
+feedparser

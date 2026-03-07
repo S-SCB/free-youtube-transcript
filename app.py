@@ -1,6 +1,8 @@
 from flask import Flask, jsonify, request
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_comment_downloader import YoutubeCommentDownloader
+import feedparser
+import urllib.parse
 
 app = Flask(__name__)
 
@@ -19,7 +21,7 @@ def get_transcript():
 @app.route('/comments')
 def get_comments():
     video_id = request.args.get('id')
-    limit = int(request.args.get('limit', 50))  # default 50 comments
+    limit = int(request.args.get('limit', 50))
     if not video_id:
         return jsonify({"error": "Please provide a video id"}), 400
     try:
@@ -30,6 +32,26 @@ def get_comments():
             if len(comments) >= limit:
                 break
         return jsonify(comments)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/news')
+def get_news():
+    topic = request.args.get('topic', 'artificial intelligence')
+    limit = int(request.args.get('limit', 20))
+    try:
+        query = urllib.parse.quote(topic)
+        url = f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en"
+        feed = feedparser.parse(url)
+        articles = []
+        for entry in feed.entries[:limit]:
+            articles.append({
+                "title": entry.title,
+                "link": entry.link,
+                "published": entry.published,
+                "source": entry.source.title if hasattr(entry, 'source') else "Unknown"
+            })
+        return jsonify(articles)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
