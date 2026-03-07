@@ -78,43 +78,26 @@ def get_news_with_content():
                 "content": ""
             }
             try:
+                # Step 1: Resolve actual URL from Google redirect
+                headers = {"User-Agent": "Mozilla/5.0"}
+                resolved = requests.get(entry.link, headers=headers, timeout=8, allow_redirects=True)
+                actual_url = resolved.url
+                article["actual_url"] = actual_url
+
+                # Step 2: Send actual URL to Tavily
                 r = requests.post(
                     "https://api.tavily.com/extract",
-                    json={"urls": [entry.link], "api_key": TAVILY_API_KEY},
+                    json={"urls": [actual_url], "api_key": TAVILY_API_KEY},
                     timeout=10
                 )
                 data = r.json()
                 if data.get("results"):
                     article["content"] = data["results"][0].get("raw_content", "")[:2000]
-                    article["actual_url"] = data["results"][0].get("url", entry.link)
-            except:
-                article["content"] = "Could not fetch content"
+                else:
+                    article["content"] = "Content blocked by publisher"
+            except Exception as ex:
+                article["content"] = f"Error: {str(ex)}"
             articles.append(article)
         return jsonify(articles)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# 3. Scrape any single URL
-@app.route('/scrape')
-def scrape_url():
-    url = request.args.get('url')
-    if not url:
-        return jsonify({"error": "Please provide a url"}), 400
-    try:
-        r = requests.post(
-            "https://api.tavily.com/extract",
-            json={"urls": [url], "api_key": TAVILY_API_KEY},
-            timeout=10
-        )
-        data = r.json()
-        if data.get("results"):
-            return jsonify({
-                "url": data["results"][0].get("url"),
-                "content": data["results"][0].get("raw_content", "")
-            })
-        return jsonify({"error": "No content found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == '__main__':
-    app.run()
