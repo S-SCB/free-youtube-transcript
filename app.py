@@ -57,13 +57,20 @@ def get_news():
                 try:
                     import requests
                     from bs4 import BeautifulSoup
-                    headers = {"User-Agent": "Mozilla/5.0"}
-                    r = requests.get(entry.link, headers=headers, timeout=5)
+                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                    # Follow redirects to get actual article URL
+                    r = requests.get(entry.link, headers=headers, timeout=8, allow_redirects=True)
+                    actual_url = r.url
                     soup = BeautifulSoup(r.text, 'html.parser')
+                    # Remove scripts and styles
+                    for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
+                        tag.decompose()
                     paragraphs = soup.find_all('p')
-                    article["content"] = " ".join([p.get_text() for p in paragraphs[:5]])
-                except:
-                    article["content"] = "Could not fetch content"
+                    content = " ".join([p.get_text().strip() for p in paragraphs[:8] if len(p.get_text().strip()) > 50])
+                    article["content"] = content if content else "Content blocked by publisher"
+                    article["actual_url"] = actual_url
+                except Exception as ex:
+                    article["content"] = f"Could not fetch: {str(ex)}"
             articles.append(article)
         return jsonify(articles)
     except Exception as e:
